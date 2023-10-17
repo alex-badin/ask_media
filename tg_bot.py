@@ -128,7 +128,7 @@ def ask_openai(request, news4request, model_name = "gpt-3.5-turbo", tokens_out =
 def ask_media(request, dates=None, sources=None, stance=None, model_name = "gpt-3.5-turbo", tokens_out = 512, full_reply = True):
     # check request time
     request_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-    
+
     # get news
     df_filtered = get_filtered_df(request, dates=dates, sources=sources, stance=stance)
     news4request, news_links = get_top_openai(df_filtered, request=request, model="text-embedding-ada-002", top_n=10)
@@ -184,7 +184,7 @@ You task is to analyse what is similar and what is different in all these texts.
 1) в [] указан источник\
 2) далее идет текст на тему выше.\
 Твоя задача - проанализировать, что общего и что разного в этих текстах. Сначала скажи, что общего. \n\
-Затем, для каждого источника, скажи, в чем разница в формате: [истчоник] - в чем отличия\
+Затем, для каждого источника, скажи, в чем разница в формате: [истчоник] - в чем отличия.\
 \nВсего не более 1500 символов."
 
     reply = openai.ChatCompletion.create(
@@ -229,28 +229,29 @@ You task is to analyse what is similar and what is different in all these texts.
 
 #=== TECHNICAL functions ===#
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start_ru(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=update.effective_chat.id, text=\
-                                   "Чтобы отфильтровать новости с определенной дате, наберите /set_date ГГГГ-ММ-ДД (если набрать 2 даты, то вторая дата - окончание периода).\n \
-Чтобы проверить даты, наберите /show_dates.\n \
-Чтобы спросить у какой-то группы источников, наберите /ask_voenkor, /ask_alter, /ask_moder, /ask_inet_prop или /ask_tv + ваш вопрос.\n \
-Чтобы сравнить группы источников между собой, наберите /ask_all_stances + ваш вопрос.\n\
+                                   "Чтобы отфильтровать новости с определенной дате, введите /set_date ГГГГ-ММ-ДД (если набрать 2 даты, то вторая дата - окончание периода).\n \
+Чтобы проверить даты, введите /show_dates.\n \
+Чтобы спросить у какой-то группы источников, введите /ask_voenkor, /ask_alter, /ask_moder, /ask_inet_prop или /ask_tv + ваш вопрос.\n \
+Чтобы сравнить группы источников между собой, введите /ask_all_stances + ваш вопрос.\n\
 Важные моменты:\n\
 1: Сейчас база содержит только новости по войне в Украине с 2022-02-01 по 2023-01-31.\n\
 2: Модель отвечает на основе наиболее близких 10 новостей, поэтому не дает полной картины.\n\
-3: Как и другие LLM ответ может галлюцинировать. Но вы можете проверить сами новости, пройдя по ссылкам.\n\
+3: Как и другие LLM, может галлюцинировать. Но вы можете проверить сами новости, пройдя по ссылкам.\n\
 4: Запросы лучше делать в виде вопросов (желательно конкретнее)), а не общих тем (так настроены промпты). Например, 'какова ситуация с мирными жителями в Украине?' вместо 'мирные жители в Украине'")
 
-async def start_en(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=update.effective_chat.id, text=\
-                                   "To set start date for news filtering, type /set_date YYYY-MM-DD (if 2 dates are typed, second is set as finish date).\n \
+                                   "To set start date for news filtering, type /set_date YYYY-MM-DD (if 2 dates are typed, second is set as finish date). \
 To show dates, type /show_dates.\n \
 To ask specific media stance, type /ask_voenkor, /ask_alter, /ask_moder, /ask_inet_prop or /ask_tv + your question.\n \
 To ask & compare all stances, type /ask_all_stances + your question.\n\
 Note1: Database contains only news from on war in Ukraine from 2022-02-01 till 2023-01-31.\n\
 Note2: Answers are based on sample of 10 news, so it can't make a full picture.\n\
 Note3: Like all LLM it may sometimes hallucinate. But you can check the refered news following the links\n\
-Note4: Запросы лучше делать в виде вопросов (желательно конкретнее)), а не общих тем (так настроены промпты). Например, 'какова ситуация с мирными жителями в Украине?' вместо 'мирные жители в Украине'")
+# Note4: Запросы лучше делать в виде вопросов (желательно конкретнее)), а не общих тем (так настроены промпты). Например, 'какова ситуация с мирными жителями в Украине?' вместо 'мирные жители в Украине'\
+")
 
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply = update.message.text
@@ -313,6 +314,7 @@ async def ask_voenkor(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if request == '':
         await context.bot.send_message(chat_id=update.effective_chat.id, text="No request")
     else:
+        await context.bot.send_message(chat_id=update.effective_chat.id, text="In progress...Usually takes 10-20 sec")
         reply = ask_media(request, dates=dates, stance=['voenkor'], model_name = model_name)
         await context.bot.send_message(chat_id=update.effective_chat.id, text=reply)
 
@@ -321,6 +323,7 @@ async def ask_alter(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if request == '':
         await context.bot.send_message(chat_id=update.effective_chat.id, text="No request")
     else:
+        await context.bot.send_message(chat_id=update.effective_chat.id, text="In progress...Usually takes 10-20 sec")
         reply = ask_media(request, dates=dates, stance=['altern'], model_name = model_name)
         await context.bot.send_message(chat_id=update.effective_chat.id, text=reply)
 
@@ -329,6 +332,7 @@ async def ask_inet_prop(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if request == '':
         await context.bot.send_message(chat_id=update.effective_chat.id, text="No request")
     else:
+        await context.bot.send_message(chat_id=update.effective_chat.id, text="In progress...Usually takes 10-20 sec")
         reply = ask_media(request, dates=dates, stance=['inet propaganda'], model_name = model_name)
         await context.bot.send_message(chat_id=update.effective_chat.id, text=reply)
 
@@ -337,6 +341,7 @@ async def ask_moder(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if request == '':
         await context.bot.send_message(chat_id=update.effective_chat.id, text="No request")
     else:
+        await context.bot.send_message(chat_id=update.effective_chat.id, text="In progress...Usually takes 10-20 sec")
         reply = ask_media(request, dates=dates, stance=['moder'], model_name = model_name)
         await context.bot.send_message(chat_id=update.effective_chat.id, text=reply)
 
@@ -345,6 +350,7 @@ async def ask_tv(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if request == '':
         await context.bot.send_message(chat_id=update.effective_chat.id, text="No request")
     else:
+        await context.bot.send_message(chat_id=update.effective_chat.id, text="In progress...Usually takes 10-20 sec")
         reply = ask_media(request, dates=dates, stance=['tv'], model_name = model_name)
         await context.bot.send_message(chat_id=update.effective_chat.id, text=reply)
 
@@ -353,6 +359,7 @@ async def ask_all_stances(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if request == '':
         await context.bot.send_message(chat_id=update.effective_chat.id, text="No request")
     else:
+        await context.bot.send_message(chat_id=update.effective_chat.id, text="Started...Usually takes 10-20 sec per each stance")
         # set params for summaries comparison
         n_tokens_out = 256
         full_reply = False
