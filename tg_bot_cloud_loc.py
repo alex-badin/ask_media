@@ -1,5 +1,5 @@
 # load api keys, libraries
-import pandas as pd
+import pandas as pd 
 import numpy as np
 import json
 import openai
@@ -18,6 +18,15 @@ logging.basicConfig(
     level=logging.INFO
 )
 
+import os
+
+# Get the current directory
+current_directory = os.getcwd()
+
+# List all files in the current directory
+files_in_current_directory = os.listdir(current_directory)
+print(current_directory)
+
 #load openai & pinecone credentials
 with open('keys/api_keys.json') as f:
   data = json.loads(f.read())
@@ -29,18 +38,8 @@ tg_token = data['tg_token']
 
 # init openai & pinecone
 openai.api_key = openai_key
-
-# SPECIAL init for PINECONE due to proxy restrictions of pythonanywhere. Openai config skipped - pinecone do not connect to openai.
-# pinecone.init(api_key=pine_key, environment=pine_env) # default init
+pinecone.init(api_key=pine_key, environment=pine_env)
 index_name = 'tg-news'
-from pinecone.core.client.configuration import Configuration as OpenApiConfiguration
-openapi_config = OpenApiConfiguration.get_default_copy()
-openapi_config.proxy = "http://proxy.server:3128"
-pinecone.init(
-        api_key=pine_key,
-        environment=pine_env,
-        openapi_config=openapi_config
-    )
 index = pinecone.Index(index_name)
 
 # global variables
@@ -126,11 +125,11 @@ def get_top_openai(request=None, request_emb=None, dates=None, sources=None, sta
         "date": { "$gte": start_date },
         "date": { "$lte": end_date }
         }
-
+    
     # query pinecone
     res = index.query(request_emb, top_k=10, include_metadata=True, filter=filter)
     top_sim_news = pd.DataFrame(res.to_dict()['matches']).join(pd.DataFrame(res.to_dict()['matches'])['metadata'].apply(pd.Series))
-
+    
     # collect links & similarities
     top_sim_news['msg_id'] = top_sim_news['id'].apply(lambda x: x.split('_')[-1])
     top_sim_news['channel_name'] = top_sim_news['id'].apply(lambda x: '_'.join(x.split('_')[:-1]))
@@ -304,7 +303,6 @@ Note2: Answers are based on sample of 10 news, so it's not a comprehensive overv
 Note3: Like all LLM it may sometimes hallucinate. But you can check the refered news following the links\n\
 Note4: Questions phrased conversationally usually work better than broad topic prompts. For example, 'How are civilians in Ukraine faring?' rather than just 'civilians in Ukraine.\
     ")
-
 
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply = update.message.text
