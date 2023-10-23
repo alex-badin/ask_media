@@ -30,9 +30,7 @@ tg_token = data['tg_token']
 # init openai & pinecone
 openai.api_key = openai_key
 
-# SPECIAL init for PINECONE due to proxy restrictions of pythonanywhere. Openai config skipped - pinecone do not connect to openai.
-# pinecone.init(api_key=pine_key, environment=pine_env) # default init
-index_name = 'tg-news'
+# CLOUD init for PINECONE due to proxy restrictions of pythonanywhere. Openai config skipped - pinecone do not connect to openai.
 from pinecone.core.client.configuration import Configuration as OpenApiConfiguration
 openapi_config = OpenApiConfiguration.get_default_copy()
 openapi_config.proxy = "http://proxy.server:3128"
@@ -41,6 +39,9 @@ pinecone.init(
         environment=pine_env,
         openapi_config=openapi_config
     )
+# DEFAULT LOCAL init for PINECONE
+# pinecone.init(api_key=pine_key, environment=pine_env) 
+index_name = 'tg-news'
 index = pinecone.Index(index_name)
 
 # global variables
@@ -77,8 +78,7 @@ def get_embedding(text, model="text-embedding-ada-002"):
    text = text.replace("\n", " ")
    return openai.Embedding.create(input = [text], model=model)['data'][0]['embedding']
 
-# TO REPLACE (TOP COMES FROM PINECONE) get top relevant news
-# get similar news from pinecone with filters (dates=None, sources=None, stance=None)
+# get similar news from PINECONE with filters (dates=None, sources=None, stance=None)
 def get_top_openai(request=None, request_emb=None, dates=None, sources=None, stance=None, model="text-embedding-ada-002", top_n=10):
     """
     Returns top news articles related to a given request and stance, within a specified date range.
@@ -114,7 +114,8 @@ def get_top_openai(request=None, request_emb=None, dates=None, sources=None, sta
             start_date = dates[0]
             end_date = datetime.today().strftime('%Y-%m-%d')
     else:
-        start_date = '2022-02-01'
+        # set range from 2022-02-01 to today
+        start_date = '2000-02-01'
         end_date = datetime.today().strftime('%Y-%m-%d')
 
     # filtering
@@ -123,12 +124,18 @@ def get_top_openai(request=None, request_emb=None, dates=None, sources=None, sta
 
     filter = {
         "stance": { "$eq": stance },
-        "date": { "$gte": start_date },
-        "date": { "$lte": end_date }
+        "date": { "$gte": start_date, "$lte": end_date }
         }
 
     # query pinecone
     res = index.query(request_emb, top_k=10, include_metadata=True, filter=filter)
+    #save results to txt-file
+    with open('pinecone_results.txt', 'w') as f:
+        f.write(str(res.to_dict()))
+    # check if results are empty
+    if res.to_dict()['matches'] == []:
+        print('No matches')
+        return 'No matches', 'No matches'
     top_sim_news = pd.DataFrame(res.to_dict()['matches']).join(pd.DataFrame(res.to_dict()['matches'])['metadata'].apply(pd.Series))
 
     # collect links & similarities
@@ -184,6 +191,8 @@ def ask_media(request, dates=None, sources=None, stance=None, model_name = "gpt-
     # get top news
     # INPUT: request, dates, sources, stance. OUTPUT: news4request - list of news texts for openai, news_links - list of links
     news4request, news_links = get_top_openai(request, dates=dates, sources=sources, stance=stance, model="text-embedding-ada-002", top_n=10)
+    if news4request == 'No matches':
+        return "No matches. Seems filter is too strict."
     # limit number of tokens vs model
     if model_name == "gpt-3.5-turbo":
         # print(type(news4request), len(news4request))
