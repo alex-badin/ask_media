@@ -7,6 +7,6 @@ The bot is based on RAG idea (Retrieval Augmented Generation) and works as follo
 4. Generate summary responce from the retrieved news
 5. (optionnaly) Compare the results from different stances
 
-The bot (as well as database) is up and running in the cloud (pythonanywhere) and can be used following the Telegram link: [@ask_media_bot](https://t.me/ask_media_bot). 
+The bot (as well as database) is up and running in the cloud (script - pythonanywhere, database - pinecone) and can be used following the Telegram link: [@ask_media_bot](https://t.me/ask_media_bot). 
 
 News database is updated hourly. 
