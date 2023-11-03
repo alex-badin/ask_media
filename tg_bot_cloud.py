@@ -7,7 +7,7 @@ import pinecone
 import csv
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import logging
 from telegram import Update
@@ -31,16 +31,16 @@ tg_token = data['tg_token']
 openai.api_key = openai_key
 
 # CLOUD init for PINECONE due to proxy restrictions of pythonanywhere. Openai config skipped - pinecone do not connect to openai.
-from pinecone.core.client.configuration import Configuration as OpenApiConfiguration
-openapi_config = OpenApiConfiguration.get_default_copy()
-openapi_config.proxy = "http://proxy.server:3128"
-pinecone.init(
-        api_key=pine_key,
-        environment=pine_env,
-        openapi_config=openapi_config
-    )
+# from pinecone.core.client.configuration import Configuration as OpenApiConfiguration
+# openapi_config = OpenApiConfiguration.get_default_copy()
+# openapi_config.proxy = "http://proxy.server:3128"
+# pinecone.init(
+#         api_key=pine_key,
+#         environment=pine_env,
+#         openapi_config=openapi_config
+#     )
 # DEFAULT LOCAL init for PINECONE
-# pinecone.init(api_key=pine_key, environment=pine_env) 
+pinecone.init(api_key=pine_key, environment=pine_env)
 index_name = 'tg-news'
 index = pinecone.Index(index_name)
 
@@ -112,11 +112,11 @@ def get_top_openai(request=None, request_emb=None, dates=None, sources=None, sta
             end_date = dates[1]
         else:
             start_date = dates[0]
-            end_date = datetime.today().strftime('%Y-%m-%d')
+            end_date = (datetime.today() + timedelta(days=1)).strftime('%Y-%m-%d')
     else:
         # set range from 2022-02-01 to today
         start_date = '2000-02-01'
-        end_date = datetime.today().strftime('%Y-%m-%d')
+        end_date = (datetime.today() + timedelta(days=1)).strftime('%Y-%m-%d')
 
     # filtering
     start_date = int(datetime.strptime(start_date, '%Y-%m-%d').timestamp())
@@ -430,7 +430,7 @@ async def ask_all_stances(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(chat_id=update.effective_chat.id, text="Started...Usually takes 10-20 sec per each stance")
         # set params for summaries comparison
         n_tokens_out = 256
-        full_reply = False
+        full_reply = True
 
         # get summaries for all stances
         summary_list = []
