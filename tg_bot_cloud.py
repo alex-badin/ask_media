@@ -13,6 +13,9 @@ import logging
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 
+# set working directory to the folder with the script
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO

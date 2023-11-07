@@ -20,6 +20,10 @@ from sumy.parsers.plaintext import PlaintextParser
 from sumy.nlp.tokenizers import Tokenizer
 from sumy.summarizers.lsa import LsaSummarizer
 
+#set working directory to the folder with the script
+import os
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
 import nltk
 nltk.download('punkt')
 
