@@ -291,14 +291,14 @@ You task is to analyse what is similar and what is different in all these texts.
 # FUNCTIONS FOR TELEGRAM BOT #
 # ======================== #
 
-#=== TECHNICAL functions ===#
+#=== TECHNICAL & INFO functions ===#
 
 async def start_ru(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=update.effective_chat.id, text=\
                                    "Чтобы отфильтровать новости с определенной дате, введите /set_date ГГГГ-ММ-ДД (если набрать 2 даты, то вторая дата - окончание периода).\n \
 Чтобы проверить даты, введите /show_dates.\n \
 Чтобы спросить у какой-то группы источников, введите /ask_voenkor, /ask_alter, /ask_moder, /ask_inet_prop или /ask_tv + ваш вопрос.\n \
-Чтобы сравнить группы источников между собой, введите /ask_all_stances + ваш вопрос.\n\
+Чтобы сравнить группы источников между собой, введите /ask_all + ваш вопрос.\n\
 Важные моменты:\n\
 1: Сейчас база содержит только новости по войне в Украине с 2022-02-01 по 2023-01-31.\n\
 2: Модель отвечает на основе наиболее близких 10 новостей, поэтому не дает полной картины.\n\
@@ -310,11 +310,25 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                    "To set start date for news filtering, type /set_date YYYY-MM-DD (if 2 dates are typed, second is set as finish date). \
 To show dates, type /show_dates.\n \
 To ask specific media stance, type /ask_voenkor, /ask_alter, /ask_moder, /ask_inet_prop or /ask_tv + your question.\n \
-To ask & compare all stances, type /ask_all_stances + your question.\n\
+To ask & compare all stances, type /ask_all + your question.\n\
+To get info about the stances, type /info.\n\
+Important notes:\n\
 Note1: Database is limited to news from roughly the past month from 40+ different Telegram channels\n\
 Note2: Answers are based on sample of 10 news, so it's not a comprehensive overview.\n\
-Note3: Like all LLM it may sometimes hallucinate. But you can check the refered news following the links\n\
-Note4: Questions phrased conversationally usually work better than broad topic prompts. For example, 'How are civilians in Ukraine faring?' rather than just 'civilians in Ukraine.\
+Note3: Like all LLM it may sometimes hallucinate. But you can check the refered news following the links\
+    ")
+
+async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=\
+                                   "We use Telegram channels as sources of news because \n\
+                                    1) Almost all of news sources have TG channels \n\
+                                    2) News TG channels are already shortned \n\
+                                    Here is the desription of stances:\n\
+voenkor - military correspondents\n\
+tv - telegram  TV channels\n\
+inet propaganda - pro-governent internet media (RIA Novosty, Interfax, AIF, SolovievLive, etc.)\n\
+moder - moderate media, mostly have been independent years ago (including RBC, Kommersant, BFM, Lenta, etc.) \n\
+altern - independent media, mostly labeled Foreign Agents by Russian authorities (including Meduza, BBC Russian, TheBell, etc.)\n\
     ")
 
 
@@ -437,7 +451,7 @@ async def ask_all_stances(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # get summaries for all stances
         summary_list = []
-        for stance in ['voenkor', 'altern', 'inet propaganda', 'moder', 'tv']:
+        for stance in ['voenkor', 'tv', 'inet propaganda', 'moder', 'altern']:
             reply_text = ask_media(request, dates=dates, stance=[stance], model_name = model_name, tokens_out = n_tokens_out, full_reply = full_reply)
             summary_list.append(str([stance])+ "\n" + reply_text)
             # status update
@@ -468,6 +482,7 @@ if __name__ == '__main__':
     reset_dates_handler = CommandHandler(['reset_dates', 'reset_date'], reset_dates)
     model_handler = CommandHandler('set_model', set_model)
     show_model_handler = CommandHandler('show_model', show_model)
+    info_handler = CommandHandler('info', info)
     ask_voenkor_handler = CommandHandler('ask_voenkor', ask_voenkor)
     ask_alter_handler = CommandHandler('ask_alter', ask_alter)
     ask_inet_prop_handler = CommandHandler('ask_inet_prop', ask_inet_prop)
@@ -483,6 +498,7 @@ if __name__ == '__main__':
     application.add_handler(date_handler)
     application.add_handler(show_dates_handler)
     application.add_handler(reset_dates_handler)
+    application.add_handler(info_handler)
     application.add_handler(ask_voenkor_handler)
     application.add_handler(ask_alter_handler)
     application.add_handler(ask_inet_prop_handler)
