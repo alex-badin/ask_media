@@ -1,4 +1,5 @@
 .DS_Store
+session.session
 
 # Ignore all log, api & result files 
 *.log 
@@ -9,3 +10,4 @@
 output/
 old/
 keys/
+nltk_data/
