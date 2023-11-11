@@ -8,6 +8,11 @@ import csv
 import os
 import time
 from datetime import datetime, timedelta
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_random_exponential,
+)  # for exponential backoff
 
 import logging
 from telegram import Update
@@ -23,12 +28,12 @@ logging.basicConfig(
 
 #load openai & pinecone credentials
 with open('keys/api_keys.json') as f:
-  data = json.loads(f.read())
+  credentials = json.loads(f.read())
 
-openai_key = data['openai_key']
-pine_key = data['pine_key']
-pine_env = data['pine_env']
-tg_token = data['tg_token']
+openai_key = credentials['openai_key']
+pine_key = credentials['pine_key']
+pine_env = credentials['pine_env']
+tg_token = credentials['tg_token']
 
 # init openai & pinecone
 openai.api_key = openai_key
@@ -82,7 +87,8 @@ def get_embedding(text, model="text-embedding-ada-002"):
    return openai.Embedding.create(input = [text], model=model)['data'][0]['embedding']
 
 # get similar news from PINECONE with filters (dates=None, sources=None, stance=None)
-def get_top_openai(request=None, request_emb=None, dates=None, sources=None, stance=None, model="text-embedding-ada-002", top_n=10):
+@retry(stop=stop_after_attempt(6), wait=wait_random_exponential(multiplier=1, max=10))
+def get_top_pine(request=None, request_emb=None, dates=None, sources=None, stance=None, model="text-embedding-ada-002", top_n=10):
     """
     Returns top news articles related to a given request and stance, within a specified date range.
 
@@ -152,7 +158,8 @@ def get_top_openai(request=None, request_emb=None, dates=None, sources=None, sta
     return news4request, news_links
 
 ## Ask OpenAI
-def ask_openai(request, news4request, model_name = "gpt-3.5-turbo", tokens_out = 512):
+@retry(stop=stop_after_attempt(6), wait=wait_random_exponential(multiplier=1, max=10))
+def ask_openai(request, news4request, model_name = "gpt-3.5-turbo-1106", tokens_out = 512):
 
     system_content_en = f"You are given few short news texts in Russian. Based on these texts you need to answer the following question: {request}. \
         First, analyze if the texts provide an answer to the question. \
@@ -187,13 +194,13 @@ def ask_openai(request, news4request, model_name = "gpt-3.5-turbo", tokens_out =
     return response
 
 # FUNCTION ask_media to combine all together (TO USE IN TG BOT REQUESTS)
-def ask_media(request, dates=None, sources=None, stance=None, model_name = "gpt-3.5-turbo", tokens_out = 512, full_reply = True):
+def ask_media(request, dates=None, sources=None, stance=None, model_name = "gpt-3.5-turbo-1106", tokens_out = 512, full_reply = True):
     # check request time
     request_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
 
     # get top news
     # INPUT: request, dates, sources, stance. OUTPUT: news4request - list of news texts for openai, news_links - list of links
-    news4request, news_links = get_top_openai(request, dates=dates, sources=sources, stance=stance, model="text-embedding-ada-002", top_n=10)
+    news4request, news_links = get_top_pine(request, dates=dates, sources=sources, stance=stance, model="text-embedding-ada-002", top_n=10)
     if news4request == 'No matches':
         return "No matches. Seems filter is too strict."
     # limit number of tokens vs model
@@ -321,14 +328,14 @@ Note3: Like all LLM it may sometimes hallucinate. But you can check the refered 
 async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=update.effective_chat.id, text=\
                                    "We use Telegram channels as sources of news because \n\
-                                    1) Almost all of news sources have TG channels \n\
-                                    2) News TG channels are already shortned \n\
-                                    Here is the desription of stances:\n\
-voenkor - military correspondents\n\
-tv - telegram  TV channels\n\
-inet propaganda - pro-governent internet media (RIA Novosty, Interfax, AIF, SolovievLive, etc.)\n\
-moder - moderate media, mostly have been independent years ago (including RBC, Kommersant, BFM, Lenta, etc.) \n\
-altern - independent media, mostly labeled Foreign Agents by Russian authorities (including Meduza, BBC Russian, TheBell, etc.)\n\
+1) Almost all of news sources have TG channels \n\
+2) News in TG channels are already shortned which facilitates AI processing \n\
+Here is the desription of stances:\n\
+[voenkor] - military correspondents\n\
+[tv] - telegram  TV channels\n\
+[inet propaganda] - pro-governent internet media (RIA Novosty, Interfax, AIF, SolovievLive, etc.)\n\
+[moder] - moderate media, mostly have been independent years ago (including RBC, Kommersant, BFM, Lenta, etc.) \n\
+[altern] - independent media, mostly labeled Foreign Agents by Russian authorities (including Meduza, BBC Russian, TheBell, etc.)\n\
     ")
 
 
