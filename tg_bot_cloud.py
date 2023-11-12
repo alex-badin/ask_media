@@ -159,7 +159,7 @@ def get_top_pine(request=None, request_emb=None, dates=None, sources=None, stanc
 
 ## Ask OpenAI
 @retry(stop=stop_after_attempt(6), wait=wait_random_exponential(multiplier=1, max=10))
-def ask_openai(request, news4request, model_name = "gpt-3.5-turbo-1106", tokens_out = 512):
+def ask_openai(request, news4request, model_name = "gpt-3.5-turbo", tokens_out = 512):
 
     system_content_en = f"You are given few short news texts in Russian. Based on these texts you need to answer the following question: {request}. \
         First, analyze if the texts provide an answer to the question. \
@@ -194,7 +194,7 @@ def ask_openai(request, news4request, model_name = "gpt-3.5-turbo-1106", tokens_
     return response
 
 # FUNCTION ask_media to combine all together (TO USE IN TG BOT REQUESTS)
-def ask_media(request, dates=None, sources=None, stance=None, model_name = "gpt-3.5-turbo-1106", tokens_out = 512, full_reply = True):
+def ask_media(request, dates=None, sources=None, stance=None, model_name = "gpt-3.5-turbo", tokens_out = 512, full_reply = True):
     # check request time
     request_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
 
