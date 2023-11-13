@@ -28,6 +28,7 @@ import nltk
 nltk.download('punkt')
 
 keys_path = 'keys/'
+data_path = 'TG_data/'
 
 start_date = datetime.datetime(2023, 10, 1) # minimum date for TelegramClient
 # set to True if you want to save the pickle file (unreliable, probably due to different pandas versions, better to save to csv)
@@ -95,7 +96,20 @@ def clean_text(text):
 
     return text
 
-# %%
+# save to pickle
+def save_to_pickle(df, channel):
+    # load old pickle if exists
+    new_len = df.shape[0]
+    try:
+        df_old = pd.read_pickle(f'{data_path}/{channel}.pkl')
+        df = pd.concat([df_old, df], ignore_index=True)
+        df.drop_duplicates(subset=['id'], inplace = True) # remove duplicates
+        df.to_pickle(f'{data_path}/{channel}.pkl')
+        print(f"Saved {new_len} for {channel} messages to pickle.")
+    except:
+        df.to_pickle(f'{data_path}/{channel}.pkl')
+        print(f"Saved {new_len} messages to pickle.")
+
 # summarize the news (select 2 most important sentences)
 def summarize(text, language="russian", sentences_count=2):
     parser = PlaintextParser.from_string(text, Tokenizer(language))
@@ -106,7 +120,6 @@ def summarize(text, language="russian", sentences_count=2):
 # NEED MORE FLEXIBLE MODEL
 # summarize the news - need to keep length upto 750 characters
 
-# %%
 def process_new_messages(df, channel, stance):
     # add channel name & stance
     df.loc[:, 'channel'] = channel
@@ -118,7 +131,6 @@ def process_new_messages(df, channel, stance):
     df.loc[:, 'summary'] = df['cleaned_message'].apply(lambda x: summarize(x, sentences_count=3) if len(x) > 750 else summarize(x, sentences_count=2) if len(x) > 500 else x)
     return df
 
-# %%
 #function to get new messages from channel
 
 async def get_new_messages(channel, last_id, stance, start_date):
@@ -143,7 +155,6 @@ async def get_new_messages(channel, last_id, stance, start_date):
     # return df
     return df
 
-# %%
 # function for openai embeddings
 # decorator for exponential backoff
 @retry(stop=stop_after_attempt(6), wait=wait_random_exponential(multiplier=1, max=10))
@@ -164,7 +175,6 @@ def get_embeddings_df(df, text_col='summary', model="text-embedding-ada-002"):
     return df
 
 
-# %%
 def upsert_to_pinecone(df, index, batch_size=100):
     # create df for pinecone
     meta_col = ['cleaned_message', 'summary', 'stance', 'channel', 'date', 'views']
@@ -187,7 +197,6 @@ def upsert_to_pinecone(df, index, batch_size=100):
     print(f"Upserted {df4pinecone.shape[0]} records. Last id: {df4pinecone.iloc[-1]['id']}")
 
 
-# %%
 # init openai
 openai.api_key = openai_key
 # initialize pinecone
