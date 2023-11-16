@@ -126,7 +126,7 @@ def process_new_messages(df, channel, stance):
     df.loc[:, 'stance'] = stance
     df.loc[:, 'cleaned_message'] = df['message'].apply(clean_text) #remove emojis, urls, foreign agent text
     df.drop_duplicates(subset=['id'], inplace = True) # remove duplicates
-    df = df[~df.cleaned_message.str.len().between(0, 30)] #remove empty or too short messages
+    df = df[~df.cleaned_message.str.len().between(0, 30)].copy() #remove empty or too short messages
     # summarize cleaned_messages: 2 sentences if length > 750, 3 sentences if length > 1500
     df.loc[:, 'summary'] = df['cleaned_message'].apply(lambda x: summarize(x, sentences_count=3) if len(x) > 750 else summarize(x, sentences_count=2) if len(x) > 500 else x)
     return df

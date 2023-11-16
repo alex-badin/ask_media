@@ -1,5 +1,5 @@
 .DS_Store
-session.session
+# session.session
 
 # Ignore all log, api & result files 
 *.log 
