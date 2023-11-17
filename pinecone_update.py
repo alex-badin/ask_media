@@ -84,7 +84,7 @@ def clean_text(text):
     # Remove URLs
     text = url_pattern.sub(r'', str(text))
     # remove /n
-    text = text.replace('\n', '')
+    text = text.replace('\n', ' ')
     # Remove any remaining variation selectors
     text = ''.join(char for char in text if unicodedata.category(char) != 'Mn')
 
