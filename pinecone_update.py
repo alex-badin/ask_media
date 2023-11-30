@@ -5,7 +5,6 @@ import unicodedata
 import time
 import datetime
 from tqdm import tqdm
-from tqdm.notebook import tqdm_notebook
 import asyncio
 from tenacity import (
     retry,
