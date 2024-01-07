@@ -235,7 +235,7 @@ for i, channel, last_id, stance in tqdm(df_channels[['channel_name', 'last_id', 
         if save_pickle == True:
             save_to_pickle(df, channel)
     except:
-        missed_channels.appned(channel)
+        missed_channels.append(channel)
         print(f"!!! some ERROR happend with channel {channel}")
         continue
 print(f"Missed channels: {', '.join(missed_channels)}")
