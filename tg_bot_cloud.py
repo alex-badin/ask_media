@@ -400,51 +400,32 @@ async def reset_dates(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=update.effective_chat.id, text="Dates reset. Now all dates of database are used.")
 
 #=== ASK_MDEDIA functions ===#
-#/ask_voenkor, /ask_alter, /ask_moder, /ask_inet_prop or /ask_tv || ['inet propaganda', 'altern', 'tv', 'moder', 'voenkor']
-async def ask_voenkor(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+# Define a generic function to handle the ask_stance requests
+async def ask_stance(update: Update, context: ContextTypes.DEFAULT_TYPE, stance: str):
     request = ' '.join(context.args)
     if request == '':
         await context.bot.send_message(chat_id=update.effective_chat.id, text="No request")
     else:
         await context.bot.send_message(chat_id=update.effective_chat.id, text="In progress...Usually takes 10-20 sec")
-        reply = ask_media(request, dates=dates, stance=['voenkor'], model_name = model_name)
+        reply = ask_media(request, dates=dates, stance=[stance], model_name=model_name)
         await context.bot.send_message(chat_id=update.effective_chat.id, text=reply)
+
+# Define the optimized handlers for each stance
+async def ask_voenkor(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await ask_stance(update, context, 'voenkor')
 
 async def ask_alter(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    request = ' '.join(context.args)
-    if request == '':
-        await context.bot.send_message(chat_id=update.effective_chat.id, text="No request")
-    else:
-        await context.bot.send_message(chat_id=update.effective_chat.id, text="In progress...Usually takes 10-20 sec")
-        reply = ask_media(request, dates=dates, stance=['altern'], model_name = model_name)
-        await context.bot.send_message(chat_id=update.effective_chat.id, text=reply)
+    await ask_stance(update, context, 'altern')
 
 async def ask_inet_prop(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    request = ' '.join(context.args)
-    if request == '':
-        await context.bot.send_message(chat_id=update.effective_chat.id, text="No request")
-    else:
-        await context.bot.send_message(chat_id=update.effective_chat.id, text="In progress...Usually takes 10-20 sec")
-        reply = ask_media(request, dates=dates, stance=['inet propaganda'], model_name = model_name)
-        await context.bot.send_message(chat_id=update.effective_chat.id, text=reply)
+    await ask_stance(update, context, 'inet propaganda')
 
 async def ask_moder(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    request = ' '.join(context.args)
-    if request == '':
-        await context.bot.send_message(chat_id=update.effective_chat.id, text="No request")
-    else:
-        await context.bot.send_message(chat_id=update.effective_chat.id, text="In progress...Usually takes 10-20 sec")
-        reply = ask_media(request, dates=dates, stance=['moder'], model_name = model_name)
-        await context.bot.send_message(chat_id=update.effective_chat.id, text=reply)
+    await ask_stance(update, context, 'moder')
 
 async def ask_tv(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    request = ' '.join(context.args)
-    if request == '':
-        await context.bot.send_message(chat_id=update.effective_chat.id, text="No request")
-    else:
-        await context.bot.send_message(chat_id=update.effective_chat.id, text="In progress...Usually takes 10-20 sec")
-        reply = ask_media(request, dates=dates, stance=['tv'], model_name = model_name)
-        await context.bot.send_message(chat_id=update.effective_chat.id, text=reply)
+    await ask_stance(update, context, 'tv')
 
 async def ask_all_stances(update: Update, context: ContextTypes.DEFAULT_TYPE):
     request = ' '.join(context.args)

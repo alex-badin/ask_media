@@ -11,10 +11,12 @@ from tenacity import (
     stop_after_attempt,
     wait_random_exponential,
 )  # for exponential backoff
+import traceback
 
 import openai
 import pinecone
 from telethon import TelegramClient
+from telethon.sessions import StringSession
 from sumy.parsers.plaintext import PlaintextParser
 from sumy.nlp.tokenizers import Tokenizer
 from sumy.summarizers.lsa import LsaSummarizer
@@ -29,24 +31,24 @@ nltk.download('punkt')
 keys_path = 'keys/'
 data_path = 'TG_data/'
 
-start_date = datetime.datetime(2023, 10, 1) # minimum date for TelegramClient
+start_date = datetime.datetime.now() - datetime.timedelta(days=40) # minimum date for TelegramClient, to keep in 100K limit.
 # set to True if you want to save the pickle file (unreliable, probably due to different pandas versions, better to save to csv)
 save_pickle = False
 
 with open(keys_path+'api_keys.json') as f:
-  data = json.loads(f.read())
+  api_keys = json.loads(f.read())
 
 # load TG credentials
-api_id = data['api_id']
-api_hash = data['api_hash']
-phone = data['phone']
+api_id = api_keys['api_id']
+api_hash = api_keys['api_hash']
+session_string = api_keys['session_string']
 
 #load openai credentials
-openai_key = data['openai_key']
+openai_key = api_keys['openai_key']
 
 # load pinecone credentials
-pine_key = data['pine_key']
-pine_env = data['pine_env']
+pine_key = api_keys['pine_key']
+pine_env = api_keys['pine_env']
 
 
 # Steps (per each channel):
@@ -134,9 +136,9 @@ def process_new_messages(df, channel, stance):
 #function to get new messages from channel
 
 async def get_new_messages(channel, last_id, stance, start_date):
-    async with TelegramClient('session', api_id, api_hash
-    , system_version="4.16.30-vxCUSTOM"
-    ) as client:
+    async with TelegramClient(StringSession(session_string), api_id, api_hash
+                            , system_version="4.16.30-vxCUSTOM"
+                            ) as client:
         # COLLECT NEW MESSAGES
         data = [] # for collecting new messages
         # check if last_id is integer (=set)
@@ -234,8 +236,9 @@ for i, channel, last_id, stance in tqdm(df_channels[['channel_name', 'last_id', 
         # save new messages to pickle (strange errors with pickle df, probably due to different pd versions)
         if save_pickle == True:
             save_to_pickle(df, channel)
-    except:
+    except Exception as e:
         missed_channels.append(channel)
-        print(f"!!! some ERROR happend with channel {channel}")
+        print(f"!!! ERROR occurred with channel {channel}: {str(e)}")
+        traceback.print_exc()
         continue
 print(f"Missed channels: {', '.join(missed_channels)}")
