@@ -13,8 +13,9 @@ from tenacity import (
 )  # for exponential backoff
 import traceback
 
-import openai
-import pinecone
+# import openai
+import cohere
+from pinecone import Pinecone
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from sumy.parsers.plaintext import PlaintextParser
@@ -31,7 +32,7 @@ nltk.download('punkt')
 keys_path = 'keys/'
 data_path = 'TG_data/'
 
-start_date = datetime.datetime.now() - datetime.timedelta(days=40) # minimum date for TelegramClient, to keep in 100K limit.
+start_date = datetime.datetime.now() - datetime.timedelta(days=1) # minimum date for TelegramClient, to keep in 100K limit.
 # set to True if you want to save the pickle file (unreliable, probably due to different pandas versions, better to save to csv)
 save_pickle = False
 
@@ -45,10 +46,13 @@ session_string = api_keys['session_string']
 
 #load openai credentials
 openai_key = api_keys['openai_key']
+# load cohere credentials
+cohere_key = api_keys['cohere_key_prod']
+co = cohere.Client(cohere_key)
 
 # load pinecone credentials
 pine_key = api_keys['pine_key']
-pine_env = api_keys['pine_env']
+# pine_env = api_keys['pine_env']
 
 
 # Steps (per each channel):
@@ -159,20 +163,31 @@ async def get_new_messages(channel, last_id, stance, start_date):
 
 # function for openai embeddings
 # decorator for exponential backoff
-@retry(stop=stop_after_attempt(6), wait=wait_random_exponential(multiplier=1, max=10))
-def get_embedding(text, model="text-embedding-ada-002"):
-    response = openai.Embedding.create(
-        input=text,
-        model=model
-    )
-    return response['data'][0]['embedding']
+# @retry(stop=stop_after_attempt(6), wait=wait_random_exponential(multiplier=1, max=10))
+# def get_embedding_openai(text, model="text-embedding-ada-002"):
+#     response = openai.Embedding.create(
+#         input=text,
+#         model=model
+#     )
+#     return response['data'][0]['embedding']
 
-def get_embeddings_df(df, text_col='summary', model="text-embedding-ada-002"):
-    embeddings = []
-    for text in df[text_col]:
-        embed = get_embedding(text, model=model)
-        embeddings.append(embed)
-    df['embeddings'] = embeddings
+# function for cohere embeddings
+# decorator for exponential backoff
+@retry(stop=stop_after_attempt(6), wait=wait_random_exponential(multiplier=1, max=10))
+def get_embedding(text, model = 'embed-multilingual-v3.0', input_type = 'clustering'):
+    response = co.embed(
+        texts = text,
+        model = model,
+        input_type = input_type
+                )
+    return response.embeddings
+
+
+def get_embeddings_df(df, text_col='summary', model="embed-multilingual-v3.0"):
+    df.loc[:, 'embeddings'] = get_embedding(
+                                    df[text_col].to_list(), 
+                                    model=model
+                                    )
     print(f"Embeddings for {df.shape[0]} messages collected.")
     return df
 
@@ -199,12 +214,10 @@ def upsert_to_pinecone(df, index, batch_size=100):
     print(f"Upserted {df4pinecone.shape[0]} records. Last id: {df4pinecone.iloc[-1]['id']}")
 
 
-# init openai
-openai.api_key = openai_key
 # initialize pinecone
-pinecone.init(api_key=pine_key, environment=pine_env)
-index_name='tg-news'
-pine_index = pinecone.Index(index_name)
+pc = Pinecone(pine_key)
+index_name = "news-db"
+pine_index = pc.Index(index_name)
 # create session_stats
 df_channel_stats = pd.DataFrame() # store N of posts per channel per day
 session_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") # to name session stats file
@@ -222,7 +235,7 @@ for i, channel, last_id, stance in tqdm(df_channels[['channel_name', 'last_id', 
         # clean, summarize, add channel name & stance
         df = process_new_messages(df, channel, stance)
         # get embeddings with progress bar
-        df = get_embeddings_df(df, text_col='summary', model="text-embedding-ada-002")
+        df = get_embeddings_df(df, text_col='summary', model="embed-multilingual-v3.0")
         # upsert to pinecone
         upsert_to_pinecone(df, pine_index)
 
