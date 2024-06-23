@@ -13,7 +13,8 @@ from tenacity import (
 )  # for exponential backoff
 import traceback
 
-# import openai
+# import cloud APIs
+import boto3
 import cohere
 from pinecone import Pinecone
 from telethon import TelegramClient
@@ -22,18 +23,25 @@ from sumy.parsers.plaintext import PlaintextParser
 from sumy.nlp.tokenizers import Tokenizer
 from sumy.summarizers.lsa import LsaSummarizer
 
-#set working directory to the folder with the script
-import os
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
-
 import nltk
 nltk.download('punkt')
 
-keys_path = 'keys/'
-data_path = 'TG_data/'
+# Initialize boto3 client for Secrets Manager and S3
+secrets_client = boto3.client('secretsmanager')
+s3_client = boto3.client('s3')
 
-with open(keys_path+'api_keys.json') as f:
-  api_keys = json.loads(f.read())
+def get_secret(secret_name):
+    """Fetch secret from AWS Secrets Manager."""
+    try:
+        get_secret_value_response = secrets_client.get_secret_value(SecretId=secret_name)
+        secret = get_secret_value_response['SecretString']
+        return json.loads(secret)
+    except Exception as e:
+        print(f"Error fetching secret: {e}")
+        return None
+    
+# Fetch API keys from Secrets Manager
+api_keys = get_secret('_keys_secret_name')  # Replace '_keys_secret_name' with your actual secret name
 
 start_date = datetime.datetime.now() - datetime.timedelta(days=4) # minimum date for TelegramClient, to keep in 100K limit.
 # set to True if you want to save the pickle file (unreliable, probably due to different pandas versions, better to save to csv)
@@ -54,22 +62,6 @@ co = cohere.Client(cohere_key)
 pine_key = api_keys['pine_key']
 pine_index = api_keys['pine_index']
 
-
-# Steps (per each channel):
-# - identify last_id (channels.csv)
-# - download from TG as per last_id
-# - process messages: cleaning, deduplicating, summary
-# - create embeds from openai
-# - date format into int
-# - transform into pinecone format
-# - upsert into pinecone
-# - add into main files (pkl) - optional
-# - iterate over channels
-# - update last_id in channels.csv
-# - create session_stats file
-# - update total_stats file
-
-# %% [markdown]
 # ============FUNCTIONS============
 
 # clean text
@@ -213,7 +205,7 @@ def upsert_to_pinecone(df, index, batch_size=100):
         index.upsert(vectors=df4pinecone.iloc[i:i+batch_size].to_dict('records'))
     print(f"Upserted {df4pinecone.shape[0]} records. Last id: {df4pinecone.iloc[-1]['id']}")
 
-# ===RUN======================================================================
+# =============================================================================
 # initialize pinecone
 pc = Pinecone(pine_key)
 pine_index = pc.Index(pine_index)
