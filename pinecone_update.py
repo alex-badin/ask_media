@@ -12,12 +12,13 @@ from tenacity import (
     wait_random_exponential,
 )  # for exponential backoff
 import traceback
+import uuid
 
-# import openai
 import cohere
 from pinecone import Pinecone
 from telethon import TelegramClient
 from telethon.sessions import StringSession
+from pyairtable import Api
 from sumy.parsers.plaintext import PlaintextParser
 from sumy.nlp.tokenizers import Tokenizer
 from sumy.summarizers.lsa import LsaSummarizer
@@ -44,22 +45,29 @@ api_id = api_keys['api_id']
 api_hash = api_keys['api_hash']
 session_string = api_keys['session_string']
 
-#load openai credentials
-openai_key = api_keys['openai_key']
 # load cohere credentials
 cohere_key = api_keys['cohere_key_prod']
 co = cohere.Client(cohere_key)
 
-# load pinecone credentials
+# initialize pinecone
 pine_key = api_keys['pine_key']
 pine_index = api_keys['pine_index']
+pc = Pinecone(pine_key)
+pine_index = pc.Index(pine_index)
 
+
+# load airtable credentials
+base_id = api_keys['airtable_db']
+table_name = api_keys['airtable_table']
+api_token = api_keys['airtable_token']
+api = Api(api_token)
+table = api.table(base_id, table_name)
 
 # Steps (per each channel):
 # - identify last_id (channels.csv)
 # - download from TG as per last_id
 # - process messages: cleaning, deduplicating, summary
-# - create embeds from openai
+# - create embeds
 # - date format into int
 # - transform into pinecone format
 # - upsert into pinecone
@@ -137,7 +145,6 @@ def process_new_messages(df, channel, stance):
     return df
 
 #function to get new messages from channel
-
 async def get_new_messages(channel, last_id, start_date):
     async with TelegramClient(StringSession(session_string), api_id, api_hash
                             , system_version="4.16.30-vxCUSTOM"
@@ -162,19 +169,9 @@ async def get_new_messages(channel, last_id, start_date):
     # return df
     return df
 
-# function for OPENAI embeddings
-# decorator for exponential backoff
-# @retry(stop=stop_after_attempt(6), wait=wait_random_exponential(multiplier=1, max=10))
-# def get_embedding_openai(text, model="text-embedding-ada-002"):
-#     response = openai.Embedding.create(
-#         input=text,
-#         model=model
-#     )
-#     return response['data'][0]['embedding']
-
 # function for COHERE embeddings
 # decorator for exponential backoff
-@retry(stop=stop_after_attempt(6), wait=wait_random_exponential(multiplier=1, max=10))
+@retry(stop=stop_after_attempt(4), wait=wait_random_exponential(multiplier=1, max=10))
 def get_embedding(text, model = 'embed-multilingual-v3.0', input_type = 'clustering'):
     response = co.embed(
         texts = text,
@@ -192,7 +189,7 @@ def get_embeddings_df(df, text_col='summary', model="embed-multilingual-v3.0"):
     print(f"Embeddings for {df.shape[0]} messages collected.")
     return df
 
-
+@retry(stop=stop_after_attempt(4), wait=wait_random_exponential(multiplier=1, max=10))
 def upsert_to_pinecone(df, index, batch_size=100):
     # create df for pinecone
     meta_col = ['cleaned_message', 'summary', 'stance', 'channel', 'date', 'views']
@@ -213,28 +210,66 @@ def upsert_to_pinecone(df, index, batch_size=100):
         index.upsert(vectors=df4pinecone.iloc[i:i+batch_size].to_dict('records'))
     print(f"Upserted {df4pinecone.shape[0]} records. Last id: {df4pinecone.iloc[-1]['id']}")
 
+def update_airtable_last_id(channel, last_id):
+    matching_records = table.all(formula=f"{{channel_name}}='{channel}'")
+    if matching_records:
+        if len(matching_records) > 1:
+            print(f"Warning: More than one matching record found for channel {channel}. Only the first one will be updated.")
+        record_id = matching_records[0]['id']
+        table.update(record_id, {'last_id': int(last_id)})
+    else:
+        print(f"No matching record found for channel {channel}")
+
+def log_summary_to_airtable(parsed_channels, missed_channels, new_channels):
+    log_table_name = api_keys['airtable_log_table']
+    log_table = api.table(base_id, log_table_name)
+    
+    execution_date = datetime.datetime.now()
+    primary_key = f"{execution_date.strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
+    
+    summary = {
+        'id': primary_key,  # This will be the primary key
+        'execution_date': execution_date.isoformat(),
+        'parsed_channels_count': len(parsed_channels),
+        'parsed_channels': ', '.join(parsed_channels),
+        'missed_channels_count': len(missed_channels),
+        'missed_channels': ', '.join(missed_channels),
+        'new_channels_count': len(new_channels),
+        'new_channels': ', '.join(new_channels)
+    }
+    
+    log_table.create(summary)
+    
+    print(f"Execution summary logged with ID: {primary_key}")
+
 # ===RUN======================================================================
-# initialize pinecone
-pc = Pinecone(pine_key)
-pine_index = pc.Index(pine_index)
 # create session_stats
 df_channel_stats = pd.DataFrame() # fix N of posts per channel per day
 session_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") # to name session stats file
 
-# ITERATE OVER CHANNELS (df_channels) TO UPDATE PINCONE INDEX
-df_channels = pd.read_csv('channels.csv', sep = ';')
+# ITERATE OVER CHANNELS (from Airtable) TO UPDATE PINCONE INDEX
+records = table.all()
+df_channels = pd.DataFrame([record['fields'] for record in records])
+df_channels = df_channels[df_channels['status'] == 'Active'] # keep only active channels
+
+parsed_channels = []
 missed_channels = []
-for i, channel, last_id, stance in tqdm(df_channels[['channel_name', 'last_id', 'stance']].itertuples(), total=df_channels.shape[0]):
+new_channels = []
+
+for i, channel, last_id, stance in tqdm(df_channels[['channel_name', 'last_id', 'stance']].itertuples(), total=df_channels.shape[0], desc="Processing channels"):
     print(f"Starting channel: {channel}, last_id: {last_id}")
     try:
         # get & clean new messages
         df = asyncio.run(get_new_messages(channel, last_id, start_date=start_date))
-        if df is None:
+        if df is None or df.empty:
             continue
+        
         # clean, summarize, add channel name & stance
         df = process_new_messages(df, channel, stance)
+        
         # get embeddings
         df = get_embeddings_df(df, text_col='summary', model="embed-multilingual-v3.0")
+        
         # upsert to pinecone
         upsert_to_pinecone(df, pine_index)
 
@@ -242,15 +277,25 @@ for i, channel, last_id, stance in tqdm(df_channels[['channel_name', 'last_id', 
         df_channel_stats[channel] = df['date'].dt.date.value_counts()
         df_channel_stats.to_csv(f'session_stats/channel_stats_{session_time}.csv', sep=';', index=True)
 
-        # update last_id in df_channels
-        if len(df) > 0: df_channels.loc[i, 'last_id'] = df['id'].max()
-        df_channels.to_csv('channels.csv', index=False, sep=';')
-        # save new messages to pickle (strange errors with pickle df, probably due to different pd versions)
-        if save_pickle == True:
-            save_to_pickle(df, channel)
+        # Update last_id in Airtable
+        new_last_id = df['id'].max()
+        update_airtable_last_id(channel, new_last_id)
+        
+        parsed_channels.append(channel)
+        
+        # Check if this is a new channel (last_id was empty or zero AND we parsed messages)
+        if (last_id == '' or last_id == '0' or last_id == 0) and len(df) > 0:
+            new_channels.append(channel)
+
     except Exception as e:
         missed_channels.append(channel)
         print(f"!!! ERROR occurred with channel {channel}: {str(e)}")
         traceback.print_exc()
         continue
-print(f"Missed channels: {', '.join(missed_channels)}")
+
+# After the loop, log the summary to Airtable
+log_summary_to_airtable(parsed_channels, missed_channels, new_channels)
+
+print(f"Parsed channels: {len(parsed_channels)}")
+print(f"Missed channels: {len(missed_channels)}")
+print(f"New channels: {len(new_channels)}")
